@@ -19,11 +19,40 @@ async function bootstrap() {
   });
 
   const config = app.get(ConfigService);
+  const nodeEnv    = config.get<string>('NODE_ENV', 'development');
+  const isProduction = nodeEnv === 'production';
   const port       = config.get<number>('PORT', 3000);
   const apiPrefix  = config.get<string>('API_PREFIX', 'api/v1');
-  const corsOrigin = config.get<string>('CORS_ORIGIN', 'http://localhost:3001');
+  const rawCorsOrigin = config.get<string>('CORS_ORIGIN');
 
-  app.use(helmet());
+  if (isProduction && (!rawCorsOrigin || rawCorsOrigin.trim() === '' || rawCorsOrigin.trim() === '*')) {
+    throw new Error(
+      'CORS_ORIGIN must be explicitly configured in production and cannot be wildcard (*)',
+    );
+  }
+
+  const corsOrigin = rawCorsOrigin
+    ? (rawCorsOrigin.includes(',') ? rawCorsOrigin.split(',').map((o) => o.trim()) : rawCorsOrigin.trim())
+    : 'http://localhost:3001';
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'https:'],
+          fontSrc: ["'self'", 'https:', 'data:'],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'", 'https:'],
+          frameSrc: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   app.enableCors({
     origin: corsOrigin,
